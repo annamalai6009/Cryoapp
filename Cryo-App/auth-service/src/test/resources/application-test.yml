@@ -1,0 +1,28 @@
+spring:
+  datasource:
+    # 1. MODE=MySQL helps H2 understand MySQL-specific SQL
+    # 2. DB_CLOSE_DELAY=-1 prevents the DB from being deleted while tests are running
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        # ✅ CRITICAL FIX: This forces Hibernate to quote table names (e.g., "users")
+        # preventing the "Table not found" error caused by the reserved keyword.
+        globally_quoted_identifiers: true
+
+  mail:
+    host: localhost
+    port: 1025
+
+jwt:
+  secret: test-secret-key-minimum-32-characters-long-for-testing
+  expiration: 86400

@@ -1,0 +1,75 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:mysql://mysql:3306/freezer_monitoring
+    username: root
+    password: Joy@2317
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 10000
+      max-lifetime: 300000
+
+
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    # Prefer env vars in Docker so you can rotate safely.
+    # Use a Gmail App Password (16 chars). Do NOT include spaces.
+    username: "cloud.cryoscientific@gmail.com"
+    password: "kmzpufjmjauocbeg"
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: smtp.gmail.com
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+
+jwt:
+  secret: my-super-secret-key-for-jwt-which-is-long
+  accessExpiration: 900          # 15 minutes (recommended)
+  refreshExpiration: 604800      # 7 days (recommended)
+
+
+logging:
+  level:
+    com.cryo.auth: DEBUG
+    org.springframework.security: INFO
+
+# Google Auth Config
+google:
+  client:
+    id: 16297075692-2uar3dbej444u4magvsrfp31n0n0eiho.apps.googleusercontent.com
+
+
+# //these lines should  remove please rememeber Gopala.
+springdoc:
+  api-docs:
+    path: /auth/v3/api-docs
+

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- keep your existing parent -->
+    <parent>
+        <groupId>com.cryo</groupId>
+        <artifactId>freezer-monitoring-backend</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>gateway-service</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Gateway Service</name>
+    <description>API Gateway (Spring Cloud Gateway)</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <lombok.version>1.18.30</lombok.version>
+        <maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
+        <spring.boot.maven.plugin.version>3.2.0</spring.boot.maven.plugin.version>
+
+        <!-- Spring Cloud BOM version — adjust if your parent already manages it -->
+        <spring.cloud.version>2023.0.3</spring.cloud.version>
+    </properties>
+
+    <!-- If your parent already imports Spring Cloud BOM, you can remove this dependencyManagement block.
+         I include it here so the gateway compiles even if the parent doesn't manage Spring Cloud. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring.cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Spring Cloud Gateway -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!-- Gateway requires reactive stack (WebFlux) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+        <!-- If you're using Eureka for service discovery -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- //this dependency should  remove please rememeber Gopala.-->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+
+        <!-- Optional: actuator for health/metrics -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Common utilities (if you have a shared lib) -->
+        <dependency>
+            <groupId>com.cryo</groupId>
+            <artifactId>common-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring.boot.maven.plugin.version}</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin.version}</version>
+                <configuration>
+                    <release>${java.version}</release>
+                    <fork>true</fork>
+                    <compilerArgs>
+                        <arg>-Xlint:all</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

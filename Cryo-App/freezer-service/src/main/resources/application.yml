@@ -1,0 +1,65 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: freezer-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/freezer_monitoring
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 10000
+      max-lifetime: 300000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+      properties:
+        spring.json.add.type.headers: false
+        spring.json.trusted.packages: "*"
+
+app:
+  kafka:
+    topics:
+      freezer-alert: freezer-alert-topic
+      datalogger-alert: datalogger-alert-topic
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+
+  instance:
+    instance-id: ${spring.application.name}:${server.port}
+    prefer-ip-address: true
+
+jwt:
+  secret: my-super-secret-key-for-jwt-which-is-long
+  expiration: 86400
+
+alert:
+  service:
+    url: http://localhost:8083
+
+springdoc:
+  api-docs:
+    path: /freezers/v3/api-docs

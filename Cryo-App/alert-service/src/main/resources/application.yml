@@ -1,0 +1,100 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: alert-service
+  datasource:
+    url: jdbc:mysql://mysql:3306/freezer_monitoring
+    username: root
+    password: Joy@2317
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    maximum-pool-size: 10
+    connection-timeout: 10000
+    max-lifetime: 300000
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: krishnaavula76@gmail
+    password: lhsr rxxe yucy ydor
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+              # 🔴 THIS FIXES THE "PKIX PATH" ERROR
+            trust: "*"
+              # Add this just in case
+          checkserveridentity: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+# 🔻 REMOVE this old block completely
+# twilio:
+#   account:
+#     sid: ACxxxx
+#   auth:
+#     token: xxxxx
+#   phone:
+#     number: +1760...
+
+# ✅ NEW: WhatsApp Cloud API config
+whatsapp:
+  phone:
+    number:
+      id: 886601364538965
+  access:
+    token: EAASDFwUACS0BQSv1iNu2IdmEu05RhQ00ZAOam2RYaZCxsXYQPIwp6c8oOW4YnbNRX127n73aUZB3oE3KetZBxYuafqUSCti5biU8ri1Awzv8U26cNmZCNEZAhsWXQLtIwAL0CYH5eeLZCZASZAG7TZAL5s3ZAiVQUltAykNvvFrRPF7ltE7NZB9WrfuEl9HSQoUULOZA9oM2s41pEZCM4920IzzwMxdtZCoM13IK9vmtrlS
+
+logging:
+  level:
+    com.cryo.alert: DEBUG
+
+# //this lines should  remove please rememeber Gopala.
+springdoc:
+  api-docs:
+    path: /alerts/v3/api-docs
+
+
+jwt:
+  secret: my-super-secret-key-for-jwt-which-is-long
+  accessExpiration: 900          # 15 minutes (recommended)
+  refreshExpiration: 604800      # 7 days (recommended)
+
+
+# ... existing config ...
+
+# ✅ Fast2SMS Configuration (Add this)
+sms:
+  fast2sms:
+    api-key: irzjOSeDNvlkfXVAdKGpTmZYcu3yQtLExo9InFbqHUMR74saw0M25m8beKyDwCPrAWk7JvLjBqlc49uF  # Replace with key from fast2sms.com
+    route: q                              # 'q' for Quick/Dev, 'v3' for DLT Production
+
+# ... existing config ...
+
+
+gateway:
+  public:
+    # 🔴 REPLACE '192.168.1.X' WITH YOUR ACTUAL IP FROM STEP 1
+    # Do NOT use localhost.
+    url: http://192.168.1.22:8080

@@ -1,0 +1,6 @@
+Start-Process powershell -ArgumentList "cd eureka-server; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "cd gateway-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "cd auth-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "cd freezer-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "cd alert-service; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "cd export-service; mvn spring-boot:run"
