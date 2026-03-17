@@ -38,8 +38,10 @@ public class FreezerStatusResponse {
     private BigDecimal acVoltage;           // acVoltage
     private BigDecimal acCurrent;           // acCurrent
 
-    // ===== DATA LOGGER COMMON FIELDS =====
-    private String power;                   // data logger power string
+    // ===== DATA LOGGER COMMON FIELDS (exact JSON keys) =====
+    private String power;                   // power
+    private String batteryAlarm;            // batteryAlarm ("ON"/"OFF")
+    private BigDecimal ambientHumidity;     // ambientHumidity
     private List<DataLoggerChannelStatusDto> channels;
 
     private LocalDateTime timestamp;
@@ -238,6 +240,22 @@ public class FreezerStatusResponse {
 
     public void setPower(String power) {
         this.power = power;
+    }
+
+    public String getBatteryAlarm() {
+        return batteryAlarm;
+    }
+
+    public void setBatteryAlarm(String batteryAlarm) {
+        this.batteryAlarm = batteryAlarm;
+    }
+
+    public BigDecimal getAmbientHumidity() {
+        return ambientHumidity;
+    }
+
+    public void setAmbientHumidity(BigDecimal ambientHumidity) {
+        this.ambientHumidity = ambientHumidity;
     }
 
     public List<DataLoggerChannelStatusDto> getChannels() {

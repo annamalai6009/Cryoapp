@@ -35,6 +35,14 @@ AND c.timestamp = (
     );
 
     List<DataLoggerChannelReading>
+    findByTopicAndChannelNumberInAndTimestampBetweenOrderByTimestampAsc(
+            String topic,
+            List<String> channelNumbers,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
+    List<DataLoggerChannelReading>
     findByTopicAndTimestampBetweenOrderByTimestampAsc(
             String topic,
             LocalDateTime from,

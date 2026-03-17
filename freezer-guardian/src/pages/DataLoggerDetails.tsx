@@ -9,7 +9,6 @@ import {
   FreezerStatusResponse,
   FreezerConfigResponse,
 } from '@/services/freezerService';
-import { format, subDays, differenceInMinutes } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
 type DataLoggerChannel = {
@@ -22,9 +21,12 @@ type DataLoggerChannel = {
 };
 
 type DataLoggerStatus = FreezerStatusResponse & {
-  ambientTemperature?: number | null;
-  batteryPercentage?: number | null;
+  ambientTemperature?: number | string | null;
+  ambientHumidity?: number | string | null;
+  batteryPercentage?: number | string | null;
+  batteryAlarm?: string | boolean | null;
   power?: string | null;
+  powerAlarm?: string | boolean | null;
   channels?: DataLoggerChannel[];
 };
 
@@ -77,15 +79,7 @@ const DataLoggerDetails = () => {
     );
   }
 
-  // Online/offline based on last device timestamp (10-minute window)
-  const lastUpdate =
-    status.timestamp ? new Date(status.timestamp) : null;
-  const minutesSinceUpdate =
-    lastUpdate ? differenceInMinutes(new Date(), lastUpdate) : Number.POSITIVE_INFINITY;
-  const isOnline = Number.isFinite(minutesSinceUpdate) && minutesSinceUpdate <= 10;
-
   const rawChannels = status.channels || [];
-  // Deduplicate channels by channelNumber to avoid visual duplicates
   const channelMap = new Map<string | number, DataLoggerChannel>();
   for (const ch of rawChannels) {
     if (!channelMap.has(ch.channelNumber)) {
@@ -93,6 +87,20 @@ const DataLoggerDetails = () => {
     }
   }
   const channels = Array.from(channelMap.values());
+
+  // Format value from API (string or number) for display; exact JSON key names as labels
+  const fmt = (v: number | string | boolean | null | undefined, suffix = ''): string => {
+    if (v === true) return 'ON';
+    if (v === false) return 'OFF';
+    if (v == null || v === '') return '--';
+    if (typeof v === 'number') return `${v}${suffix}`;
+    return `${String(v).trim()}${suffix}`;
+  };
+  const fmtNum = (v: number | string | null | undefined, suffix = ''): string => {
+    if (v == null || v === '') return '--';
+    const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, ''));
+    return Number.isFinite(n) ? `${n}${suffix}` : '--';
+  };
 
   return (
     <DashboardLayout>
@@ -116,40 +124,41 @@ const DataLoggerDetails = () => {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge variant="outline" className="text-[11px] px-3 py-1 rounded-full">
-                    {status.power || 'UNKNOWN'}
-                  </Badge>
-                  <Badge variant="outline" className={isOnline ? "border-emerald-500 text-emerald-600" : "border-slate-300 text-slate-500"}>
-                    {isOnline ? "ONLINE" : "OFFLINE"}
+                    {status.power || '--'}
                   </Badge>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                 <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                    Ambient Temp
-                  </p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {status.ambientTemperature != null
-                      ? `${status.ambientTemperature.toFixed(1)}°C`
-                      : '--'}
-                  </p>
+                  <p className="text-[11px] tracking-[0.14em] text-slate-500">power</p>
+                  <p className="mt-1 font-semibold text-slate-900">{fmt(status.power)}</p>
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Battery</p>
-                  <p className="mt-1 font-semibold text-slate-900">
-                    {status.batteryPercentage != null
-                      ? `${status.batteryPercentage.toFixed(1)}%`
-                      : '--'}
-                  </p>
+                  <p className="text-[11px] tracking-[0.14em] text-slate-500">powerAlarm</p>
+                  <p className="mt-1 font-semibold text-slate-900">{fmt(status.powerAlarm, '')}</p>
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                    Channels
-                  </p>
-                  <p className="mt-1 font-semibold text-slate-900">{channels.length || '--'}</p>
+                  <p className="text-[11px] tracking-[0.14em] text-slate-500">batteryPercentage</p>
+                  <p className="mt-1 font-semibold text-slate-900">{fmtNum(status.batteryPercentage, '%')}</p>
                 </div>
+                <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
+                  <p className="text-[11px] tracking-[0.14em] text-slate-500">batteryAlarm</p>
+                  <p className="mt-1 font-semibold text-slate-900">{fmt(status.batteryAlarm)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
+                  <p className="text-[11px] tracking-[0.14em] text-slate-500">ambientTemperature</p>
+                  <p className="mt-1 font-semibold text-slate-900">{fmtNum(status.ambientTemperature, '°C')}</p>
+                </div>
+                <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
+                  <p className="text-[11px] tracking-[0.14em] text-slate-500">ambientHumidity</p>
+                  <p className="mt-1 font-semibold text-slate-900">{fmtNum(status.ambientHumidity, '%')}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-white/70 px-3 py-2">
+                <p className="text-[11px] tracking-[0.14em] text-slate-500">channels</p>
+                <p className="mt-1 font-semibold text-slate-900">{channels.length || '--'}</p>
               </div>
             </CardContent>
           </Card>
@@ -176,12 +185,7 @@ const DataLoggerDetails = () => {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     {channels.map((ch) => {
-                      const channelLabel =
-                        typeof ch.channelNumber === 'string'
-                          ? ch.channelNumber.toUpperCase().startsWith('CH')
-                            ? ch.channelNumber.toUpperCase()
-                            : `CH${ch.channelNumber}`
-                          : `CH${ch.channelNumber}`;
+                      const channelLabel = String(ch.channelNumber);
                       const isOn =
                         typeof ch.status === 'boolean'
                           ? ch.status
@@ -196,8 +200,8 @@ const DataLoggerDetails = () => {
                           className="text-left rounded-2xl border px-4 py-3 shadow-sm transition-all border-slate-100 bg-white/90 hover:border-slate-300 hover:shadow-md"
                         >
                           <div className="flex items-center justify-between">
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.14em]">
-                              Channel {channelLabel}
+                            <p className="text-[11px] font-semibold text-slate-500 tracking-[0.14em]">
+                              {channelLabel}
                             </p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${

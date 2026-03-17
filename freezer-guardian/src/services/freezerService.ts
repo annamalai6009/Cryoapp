@@ -20,6 +20,34 @@ export interface FreezerDetailResponse {
   oneMinuteAvgTemp: number;
 }
 
+type DashboardControllerRow = {
+  topic?: string | null;
+  po?: string | null;
+  timestamp?: string | null;
+  temperature?: number | string | null;
+  freezerPower?: string | boolean | null;
+};
+
+type DashboardDataLoggerRow = {
+  common?: {
+    topic?: string | null;
+    topicId?: string | null;
+    topic_id?: string | null;
+    deviceId?: string | null;
+    deviceID?: string | null;
+    dataloggerId?: string | null;
+    dataLoggerId?: string | null;
+    po?: string | null;
+    timestamp?: string | null;
+    power?: string | boolean | null;
+  } | null;
+  channels?: Array<{
+    channelNumber?: string | number | null;
+    temperature?: number | string | null;
+    status?: string | boolean | null;
+  }> | null;
+};
+
 export interface FreezerStatusResponse {
   temperature: number;
   freezerOn: boolean;
@@ -129,30 +157,100 @@ export interface UpdateSettingsRequest {
 export const freezerService = {
 
   async getDashboardData(userId: string): Promise<FreezerResponse[]> {
-    const response = await apiClient.get<FreezerDetailResponse[]>(
+    // Backend returns mixed device shapes (controller vs data logger) depending on device type.
+    // Use unknown[] and normalize into FreezerResponse for the UI.
+    const response = await apiClient.get<unknown[]>(
       `/freezers/api/internal/${userId}`
     );
 
-    return response.data.map((item, index) => {
-      const topicId = item.freezerId || null;
-      const hasTopic = !!topicId;
+    const toNonEmptyString = (v: unknown): string | null => {
+      if (typeof v !== 'string') return null;
+      const s = v.trim();
+      return s.length > 0 ? s : null;
+    };
+
+    const toNumberOrNull = (v: unknown): number | null => {
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string') {
+        const n = Number.parseFloat(v);
+        return Number.isFinite(n) ? n : null;
+      }
+      return null;
+    };
+
+    return (response.data || []).map((raw, index) => {
+      const item = raw as Partial<FreezerDetailResponse> &
+        DashboardControllerRow &
+        DashboardDataLoggerRow & {
+          freezerId?: string | null;
+          topicId?: string | null;
+          topic_id?: string | null;
+          poNumber?: string | null;
+          po?: string | null;
+        };
+
+      // Topic can be on controller rows (`topic`) OR inside datalogger rows (`common.topic`) OR legacy (`freezerId` etc).
+      const topicId =
+        toNonEmptyString(item.freezerId) ??
+        toNonEmptyString(item.topicId) ??
+        toNonEmptyString(item.topic_id) ??
+        toNonEmptyString(item.topic) ??
+        toNonEmptyString(item.common?.topic) ??
+        toNonEmptyString(item.common?.topicId) ??
+        toNonEmptyString(item.common?.topic_id) ??
+        toNonEmptyString(item.common?.deviceId) ??
+        toNonEmptyString(item.common?.deviceID) ??
+        toNonEmptyString(item.common?.dataLoggerId) ??
+        toNonEmptyString(item.common?.dataloggerId) ??
+        null;
+
+      const hasTopic = topicId !== null;
+
+      // PO can be `poNumber` (old) or `po` (controller) or `common.po` (datalogger)
+      const poNumber =
+        toNonEmptyString(item.poNumber) ??
+        toNonEmptyString(item.po) ??
+        toNonEmptyString(item.common?.po) ??
+        '';
+
+      // Temperature can be `currentTemp` (old) or `temperature` (controller). For datalogger list, pick CH1 temp if present.
+      const temperature =
+        toNumberOrNull(item.currentTemp) ??
+        toNumberOrNull(item.temperature) ??
+        toNumberOrNull(item.channels?.[0]?.temperature) ??
+        0;
+
+      const lastUpdated =
+        toNonEmptyString(item.lastUpdate) ??
+        toNonEmptyString(item.timestamp) ??
+        toNonEmptyString(item.common?.timestamp) ??
+        '';
+
+      // Status: old `status` or controller `freezerPower` or datalogger `common.power`
+      const status =
+        toNonEmptyString(item.status) ??
+        toNonEmptyString(item.freezerPower) ??
+        toNonEmptyString(item.common?.power) ??
+        'UNKNOWN';
+
+      // Name: use backend `name` when available; otherwise label by topic prefix.
+      const name =
+        toNonEmptyString(item.name) ??
+        (topicId?.toUpperCase().startsWith('DL') ? 'Data Logger' : 'Controller');
 
       // Use topicId for routing when available; otherwise fall back to PO or a stable row key
-      const id =
-        topicId ||
-        item.poNumber ||
-        `row-${index}`;
+      const id = topicId || poNumber || `row-${index}`;
 
       return {
         id,
         topicId,
         hasTopic,
-        name: item.name,
-        poNumber: item.poNumber,
-        currentTemperature: item.currentTemp,
-        status: item.status,
-        isRedAlert: item.isRedAlert,
-        lastUpdated: item.lastUpdate,
+        name,
+        poNumber,
+        currentTemperature: temperature,
+        status,
+        isRedAlert: Boolean(item.isRedAlert ?? false),
+        lastUpdated,
         oneMinuteAvgTemp: item.oneMinuteAvgTemp,
         freezerOn: item.isFreezerOn,
         doorOpen: item.isDoorOpen,

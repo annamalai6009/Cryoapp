@@ -233,6 +233,19 @@ public class RealtimeS3FetchService {
 
         dlDeviceRepository.save(device);
 
+        // ✅ Link the registered "Freezer" row (by PO) to this data logger topic for dashboard + routing.
+        // Without this, Freezer.freezerId stays null and UI shows Topic/ID as "—" and View can't open.
+        if (c.po != null && !c.po.isBlank()) {
+            freezerRepository.findByPoNumber(c.po)
+                    .ifPresent(f -> {
+                        if (f.getFreezerId() == null || f.getFreezerId().isBlank()) {
+                            f.setFreezerId(c.topic);
+                            freezerRepository.save(f);
+                            log.info("Linked DATA LOGGER PO {} -> topic {}", c.po, c.topic);
+                        }
+                    });
+        }
+
         // 🔥 DYNAMIC CHANNELS
         int totalChannels = 0;
         if (payload.getChannels() != null) {

@@ -31,6 +31,9 @@ public class DataLoggerService {
     @Transactional
     public void saveChannelReading(DataLoggerChannelReading channel) {
 
+        // Normalize channel number so DB + APIs are consistent (e.g. "CH1" -> "1")
+        channel.setChannelNumber(normalizeChannelNumber(channel.getChannelNumber()));
+
         channelRepository.save(channel);
 
         // 🔥 PUBLISH KAFKA EVENT
@@ -47,5 +50,26 @@ public class DataLoggerService {
         kafkaTemplate.send("datalogger-alert-topic", event);
     }
 
+    private String normalizeChannelNumber(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.isEmpty()) return s;
+
+        // Accept CH1 / ch01 / " CH 1 " and normalize to "1"
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^ch\\s*0*(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(s.replace(" ", ""));
+        if (m.matches()) {
+            return m.group(1);
+        }
+
+        // Keep pure numeric channels as-is (trimmed)
+        if (s.matches("^\\d+$")) {
+            return s;
+        }
+
+        // Unknown format: store as trimmed string
+        return s;
+    }
 
 }

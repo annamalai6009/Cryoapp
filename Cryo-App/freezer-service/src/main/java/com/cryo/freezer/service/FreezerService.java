@@ -118,18 +118,20 @@ public class FreezerService {
         long activeDevicesCount = 0;
 
         for (Freezer device : devices) {
+            Freezer.DeviceType deviceType = device.getDeviceType();
+            if (deviceType == null) continue; // skip malformed rows
 
-            if (device.getDeviceType() == Freezer.DeviceType.NORMAL_FREEZER) {
+            if (deviceType == Freezer.DeviceType.NORMAL_FREEZER) {
 
                 totalFreezers++;
 
                 if (device.getStatus() == Freezer.FreezerStatus.ACTIVE) {
                     activeFreezersCount++;
 
-                    FreezerReading latest =
-                            freezerReadingRepository
-                                    .findFirstByFreezerIdOrderByTimestampDesc(device.getFreezerId())
-                                    .orElse(null);
+                    String fid = device.getFreezerId();
+                    FreezerReading latest = (fid != null && !fid.isBlank())
+                            ? freezerReadingRepository.findFirstByFreezerIdOrderByTimestampDesc(fid).orElse(null)
+                            : null;
 
                     if (latest != null) {
 
@@ -155,8 +157,11 @@ public class FreezerService {
 
                 totalDataLoggers++;
 
-                List<DataLoggerChannelReading> latestChannels =
-                        dataLoggerChannelRepository.findLatestChannelsByTopic(device.getFreezerId());
+                // Avoid passing null topic to repository (causes 500)
+                String dlTopic = device.getFreezerId();
+                List<DataLoggerChannelReading> latestChannels = (dlTopic != null && !dlTopic.isBlank())
+                        ? dataLoggerChannelRepository.findLatestChannelsByTopic(dlTopic)
+                        : List.of();
 
                 totalChannels += latestChannels.size();
 
@@ -277,22 +282,34 @@ public class FreezerService {
             List<DataLoggerChannelStatusDto> channelDtos =
                     latestChannels.stream()
                             .map(ch -> new DataLoggerChannelStatusDto(
-                                    ch.getChannelNumber(),
+                                    normalizeChannelNumber(ch.getChannelNumber()),
                                     ch.getTemperature(),
                                     ch.getStatus(),
+                                    ch.getSetTemperature(),
+                                    ch.getHighTemperature(),
+                                    ch.getLowTemperature(),
                                     "ON".equalsIgnoreCase(ch.getHighAlarm()),   // ✅ FIXED
                                     "ON".equalsIgnoreCase(ch.getLowAlarm()),    // ✅ FIXED
                                     ch.getTimestamp()
                             ))
                             .toList();
 
-            return new FreezerStatusResponse(
+            FreezerStatusResponse response = new FreezerStatusResponse(
                     device.getAmbientTemperature(),
                     device.getBatteryPercentage(),
                     device.getPower(),
                     channelDtos,
                     device.getLastTimestamp()
             );
+            // Populate exact datalogger JSON keys (no anonymous subclass — avoids 500)
+            response.setPowerAlarm(device.getPowerAlarm() != null && "ON".equalsIgnoreCase(device.getPowerAlarm().trim()));
+            if (device.getBatteryAlarm() != null) {
+                response.setBatteryAlarm(device.getBatteryAlarm());
+            }
+            if (device.getAmbientHumidity() != null) {
+                response.setAmbientHumidity(device.getAmbientHumidity());
+            }
+            return response;
         }
 
 
@@ -338,12 +355,27 @@ public class FreezerService {
             if (channel == null || channel.isBlank()) {
                 channel = "1";
             }
+            String normalizedChannel = normalizeChannelNumber(channel);
+
+            // Backward-compatible: older rows may be stored as "CH1" while newer are "1"
+            java.util.List<String> channelCandidates = new java.util.ArrayList<>();
+            if (normalizedChannel != null && !normalizedChannel.isBlank()) {
+                channelCandidates.add(normalizedChannel);
+                channelCandidates.add("CH" + normalizedChannel);
+                channelCandidates.add("ch" + normalizedChannel);
+            } else {
+                channelCandidates.add(channel.trim());
+            }
+            channelCandidates = channelCandidates.stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .distinct()
+                    .toList();
 
             List<DataLoggerChannelReading> readings =
                     dataLoggerChannelRepository
-                            .findByTopicAndChannelNumberAndTimestampBetweenOrderByTimestampAsc(
+                            .findByTopicAndChannelNumberInAndTimestampBetweenOrderByTimestampAsc(
                                     freezer.getFreezerId(),
-                                    channel,
+                                    channelCandidates,
                                     from,
                                     to);
 
@@ -351,10 +383,31 @@ public class FreezerService {
                     .map(r -> new DataLoggerChartDataPoint(
                             r.getTimestamp(),
                             r.getTemperature(),
-                            r.getChannelNumber()
+                            normalizeChannelNumber(r.getChannelNumber())
                     ))
                     .toList();
         }
+    }
+
+    private String normalizeChannelNumber(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.isEmpty()) return s;
+
+        // Accept CH1 / ch01 / "CH 1" and normalize to "1"
+        String compact = s.replace(" ", "");
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^ch0*(\\d+)$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(compact);
+        if (m.matches()) {
+            return m.group(1);
+        }
+
+        if (s.matches("^\\d+$")) {
+            return s;
+        }
+
+        return s;
     }
 
 
@@ -376,9 +429,12 @@ public class FreezerService {
         List<DataLoggerChannelStatusDto> channelDtos =
                 latestChannels.stream()
                         .map(ch -> new DataLoggerChannelStatusDto(
-                                ch.getChannelNumber(),
+                                normalizeChannelNumber(ch.getChannelNumber()),
                                 ch.getTemperature(),
                                 ch.getStatus(),
+                                ch.getSetTemperature(),
+                                ch.getHighTemperature(),
+                                ch.getLowTemperature(),
                                 "ON".equalsIgnoreCase(ch.getHighAlarm()),
                                 "ON".equalsIgnoreCase(ch.getLowAlarm()),
                                 ch.getTimestamp()
@@ -432,27 +488,88 @@ public class FreezerService {
                 .collect(java.util.stream.Collectors.toMap(FreezerReading::getFreezerId, r -> r, (e, r) -> e));
 
         return freezers.stream().map(f -> {
-            FreezerReading r = readingMap.get(f.getFreezerId());
+            Freezer.DeviceType deviceType = f.getDeviceType();
+            // ===============================
+            // NORMAL FREEZER (Controller)
+            // ===============================
+            if (deviceType == Freezer.DeviceType.NORMAL_FREEZER) {
 
-            // ✅ GET FAST AVERAGE FROM RAM (Does not hit DB)
-            Double avgTemp = readingService.getFastOneMinuteAverage(f.getFreezerId());
+                String fid = f.getFreezerId();
+                FreezerReading r = fid != null ? readingMap.get(fid) : null;
 
-            // Fallback: If average is not ready (app just started), use current temp
-            if (avgTemp == null && r != null && r.getTemperature() != null) {
-                avgTemp = r.getTemperature().doubleValue();
+                // ✅ GET FAST AVERAGE FROM RAM (Does not hit DB); skip if no freezerId
+                Double avgTemp = (fid != null && !fid.isBlank())
+                        ? readingService.getFastOneMinuteAverage(fid)
+                        : null;
+
+                // Fallback: If average is not ready (app just started), use current temp
+                if (avgTemp == null && r != null && r.getTemperature() != null) {
+                    avgTemp = r.getTemperature().doubleValue();
+                }
+
+                return new FreezerDetailResponse(
+                        f.getFreezerId(),
+                        f.getName(),
+                        f.getPoNumber(),
+                        f.getStatus() != null ? f.getStatus().name() : Freezer.FreezerStatus.ACTIVE.name(),
+                        r != null ? r.getTemperature() : null,
+                        r != null ? r.getFreezerOn() : null,
+                        r != null ? r.getDoorOpen() : null,
+                        r != null ? r.getTimestamp() : null,
+                        r != null ? r.isRedAlert() : false,
+                        avgTemp // ✅ PASS AVERAGE TO DTO
+                );
+            }
+
+            // ===============================
+            // DATA LOGGER (or unknown type: treat as data logger for safe response)
+            // ===============================
+            if (deviceType != null && deviceType != Freezer.DeviceType.DATA_LOGGER) {
+                // Unknown device type: return minimal row so we don't break the list
+                return new FreezerDetailResponse(
+                        f.getFreezerId(), f.getName(), f.getPoNumber(),
+                        f.getStatus() != null ? f.getStatus().name() : "ACTIVE",
+                        null, null, null, null, false, null);
+            }
+            String topic = f.getFreezerId();
+            DataLoggerDevice dl = null;
+
+            // If the registered row doesn't have topic yet, derive it from data_logger_devices using PO (read-only here to avoid 500).
+            if ((topic == null || topic.isBlank()) && f.getPoNumber() != null && !f.getPoNumber().isBlank()) {
+                DataLoggerDevice byPo = dlDeviceRepository.findByPoNumber(f.getPoNumber()).orElse(null);
+                if (byPo != null && byPo.getTopic() != null && !byPo.getTopic().isBlank()) {
+                    topic = byPo.getTopic();
+                    dl = byPo;
+                }
+            } else if (topic != null && !topic.isBlank()) {
+                dl = dlDeviceRepository.findById(topic).orElse(null);
+            }
+
+            // Use CH1 temperature if present; else first channel; else null.
+            java.math.BigDecimal dlTemp = null;
+            if (topic != null && !topic.isBlank()) {
+                List<DataLoggerChannelReading> latestChannels = dataLoggerChannelRepository.findLatestChannelsByTopic(topic);
+                if (latestChannels != null && !latestChannels.isEmpty()) {
+                    DataLoggerChannelReading ch1 = latestChannels.stream()
+                            .filter(ch -> ch.getChannelNumber() != null &&
+                                    "1".equalsIgnoreCase(normalizeChannelNumber(ch.getChannelNumber())))
+                            .findFirst()
+                            .orElse(latestChannels.get(0));
+                    dlTemp = ch1.getTemperature();
+                }
             }
 
             return new FreezerDetailResponse(
-                    f.getFreezerId(),
+                    topic,
                     f.getName(),
                     f.getPoNumber(),
                     f.getStatus() != null ? f.getStatus().name() : Freezer.FreezerStatus.ACTIVE.name(),
-                    r != null ? r.getTemperature() : null,
-                    r != null ? r.getFreezerOn() : null,
-                    r != null ? r.getDoorOpen() : null,
-                    r != null ? r.getTimestamp() : null,
-                    r != null ? r.isRedAlert() : false,
-                    avgTemp // ✅ PASS AVERAGE TO DTO
+                    dlTemp,
+                    null,
+                    null,
+                    dl != null ? dl.getLastTimestamp() : null,
+                    false,
+                    null
             );
         }).collect(Collectors.toList());
     }
